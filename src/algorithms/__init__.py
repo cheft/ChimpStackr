@@ -5,10 +5,10 @@ import math
 import cv2
 import numba.cuda as cuda
 
-import src.algorithms.dft_imreg as dft_imreg
-import src.ImageLoadingHandler as ImageLoadingHandler
-import src.algorithms.stacking_algorithms.cpu as CPU
-import src.algorithms.stacking_algorithms.gpu as GPU
+import algorithms.dft_imreg as dft_imreg
+import ImageLoadingHandler as ImageLoadingHandler
+import algorithms.stacking_algorithms.cpu as CPU
+import algorithms.stacking_algorithms.gpu as GPU
 
 
 class Algorithm:

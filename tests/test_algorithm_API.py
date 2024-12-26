@@ -11,8 +11,8 @@ Test multiple functions of algorithm API.
 # parentdir = os.path.dirname(currentdir)
 # sys.path.insert(0, parentdir)
 
-# import src.MainWindow.Threading as QThreading
-# import src.algorithm.API as API
+# import MainWindow.Threading as QThreading
+# import algorithm.API as API
 
 # ROOT_TEMP_DIRECTORY = tempfile.TemporaryDirectory(prefix="FocusStacking_")
 

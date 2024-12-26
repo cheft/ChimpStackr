@@ -4,7 +4,7 @@
 import PySide6.QtGui as qtg
 import PySide6.QtWidgets as qtw
 
-import src.settings as settings
+import settings as settings
 
 
 class AboutAppWidget(qtw.QMessageBox):
@@ -20,7 +20,7 @@ class AboutAppWidget(qtw.QMessageBox):
         import platform
 
         self.setText(
-            "ChimpStackr version: {}\n".format(src.__version__)
+            "ChimpStackr version: {}\n".format(__version__)
             + "Qt version: {}\n".format(PySide6.__version__)
             + "Python version: {}\n".format(platform.python_version())
             + "OS: {}\n".format(platform.platform())

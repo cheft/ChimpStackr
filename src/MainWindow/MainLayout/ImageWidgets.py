@@ -7,7 +7,7 @@ import PySide6.QtCore as qtc
 import PySide6.QtWidgets as qtw
 import PySide6.QtGui as qtg
 
-import src.settings as settings
+import settings as settings
 
 # Helper class with infinite scrolling
 class InfiniteQListWidget(qtw.QListWidget):

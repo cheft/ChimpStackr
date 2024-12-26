@@ -8,7 +8,7 @@ import PySide6.QtCore as qtc
 import qt_material
 import numba.cuda as cuda
 
-import src.settings as settings
+import settings as settings
 
 
 class UserInterfaceWidget(qtw.QWidget):

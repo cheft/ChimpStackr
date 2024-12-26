@@ -9,8 +9,8 @@ sys.path.insert(0, parentdir)
 
 import numpy as np
 
-from src.ImageLoadingHandler import ImageLoadingHandler
-import src.settings as settings
+from ImageLoadingHandler import ImageLoadingHandler
+import settings as settings
 
 settings.init()
 loader = ImageLoadingHandler()

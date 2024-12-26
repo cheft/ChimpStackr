@@ -3,14 +3,14 @@ import PySide6.QtCore as qtc
 import PySide6.QtWidgets as qtw
 import PySide6.QtGui as qtg
 
-# Allow imports from top level folder. Example: "src.algorithm.API"
+# Allow imports from top level folder. Example: "algorithm.API"
 # src: https://codeolives.com/2020/01/10/python-reference-module-in-parent-directory/
 currentdir = os.path.dirname(os.path.realpath(__file__))
 parentdir = os.path.dirname(currentdir)
 sys.path.insert(0, parentdir)  # Insert at first place
 
-import src.settings as settings
-import src.MainWindow as MainWindow
+import settings as settings
+import MainWindow as MainWindow
 
 # Directory for storing tempfiles. Automatically deletes on program exit.
 ROOT_TEMP_DIRECTORY = tempfile.TemporaryDirectory(prefix="ChimpStackr_")

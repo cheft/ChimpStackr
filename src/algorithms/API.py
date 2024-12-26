@@ -3,9 +3,9 @@
 """
 import time
 
-import src.utilities as utilities
-import src.algorithms as algorithms
-import src.settings as settings
+import utilities as utilities
+import algorithms as algorithms
+import settings as settings
 
 
 class LaplacianPyramid:

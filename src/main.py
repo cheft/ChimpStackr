@@ -1,5 +1,5 @@
 import argparse
-from src.algorithms.API import LaplacianPyramid
+from algorithms.API import LaplacianPyramid
 import cv2
 
 def main():

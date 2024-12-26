@@ -6,18 +6,18 @@ import os
 import PySide6.QtCore as qtc
 import PySide6.QtWidgets as qtw
 
-import src.settings as settings
-import src.MainWindow.QActions as qt_actions_setup
-import src.MainWindow.MainLayout as MainLayout
-import src.MainWindow.Threading as QThreading
-import src.MainWindow.ProgressBar as ProgressBar
+import settings as settings
+import MainWindow.QActions as qt_actions_setup
+import MainWindow.MainLayout as MainLayout
+import MainWindow.Threading as QThreading
+import MainWindow.ProgressBar as ProgressBar
 
-# import src.MainWindow.StackSuccessDialog as StackFinishedDialog
-import src.MainWindow.TimeRemainingHandler as TimeRemainingHandler
-import src.MainWindow.ImageSavingDialog as ImageSavingDialog
-import src.MainWindow.SettingsWidget as SettingsWidget
+# import MainWindow.StackSuccessDialog as StackFinishedDialog
+import MainWindow.TimeRemainingHandler as TimeRemainingHandler
+import MainWindow.ImageSavingDialog as ImageSavingDialog
+import MainWindow.SettingsWidget as SettingsWidget
 
-import src.algorithms.API as algorithm_API
+import algorithms.API as algorithm_API
 
 if os.name == "nt":
     current_image_directory = os.path.expanduser("~")
