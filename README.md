@@ -39,3 +39,7 @@ Note: you can only build for your current platform. So for example building an A
 Wang, W., & Chang, F. (2011b). A Multi-focus Image Fusion Method Based on Laplacian Pyramid. _Journal of Computers_, _6_(12).
 
 * DFT image alignment algorithm adapted from: https://github.com/matejak/imreg_dft
+
+
+## cli
+ython3 src/main.py tests/low_res_images/DSC_0356.jpg tests/low_res_images/DSC_0358.jpg   -o result.jpg -k 6 -p 8
