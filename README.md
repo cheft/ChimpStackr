@@ -43,6 +43,15 @@ Wang, W., & Chang, F. (2011b). A Multi-focus Image Fusion Method Based on Laplac
 
 ## cli
 ```shell
+source ~/.myenv/bin/active
+
 # pip3 install -e .
 python3 src/main.py tests/low_res_images/DSC_0356.jpg tests/low_res_images/DSC_0358.jpg   -o result.jpg -k 6 -p 8
+
+python src/main.py 2160/1.png 2160/2.png 2160/5.png -o result.png -k 6 -p 8
+
+python src/main.py 2160/1.png 2160/2.png 2160/5.png 2160/4.png 2160/3.png  -o result.png -k 6 -p 8
+
+python3 src/main.py samples/xiaomi/1.jpg samples/xiaomi/2.jpg samples/xiaomi/5.jpg  -o result.jpg -k 10 -p 10
+
 ```

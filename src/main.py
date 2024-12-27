@@ -1,6 +1,7 @@
 import argparse
 from algorithms.API import LaplacianPyramid
 import cv2
+import time
 
 def main():
     # 创建命令行参数解析器
@@ -21,12 +22,20 @@ def main():
     # 设置图像路径
     processor.update_image_paths(args.images)
     
+    # 添加时间计算
+    start_time = time.time()
+    
     # 处理图像
     result = processor.align_and_stack_images()
+    
+    # 计算处理时间
+    end_time = time.time()
+    processing_time = end_time - start_time
     
     # 保存结果
     cv2.imwrite(args.output, result)
     print(f"处理完成,结果已保存至: {args.output}")
+    print(f"处理时间: {processing_time:.2f} 秒")
 
 if __name__ == "__main__":
-    main() 
+    main()
