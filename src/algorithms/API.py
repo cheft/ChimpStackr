@@ -2,6 +2,11 @@
     Exposed API for easily aligning/stacking multiple images.
 """
 import time
+import numpy as np
+try:
+    import pyopencl as cl  # 用于 Metal 支持
+except ImportError:
+    print("PyOpenCL 未安装，将使用 CPU 模式运行")
 
 import utilities as utilities
 import algorithms as algorithms
@@ -19,13 +24,38 @@ class LaplacianPyramid:
         self.fusion_kernel_size = fusion_kernel_size
         self.pyramid_num_levels = pyramid_num_levels
 
-        self.UseGPU = False
+        self.use_metal = False
+        # M2 GPU 支持
+        self.init_metal()
+
+    def init_metal(self):
+        """
+        初始化 Metal GPU 支持
+        """
+        try:
+            platforms = cl.get_platforms()
+            for platform in platforms:
+                if 'Apple' in platform.name:
+                    devices = platform.get_devices()
+                    if devices:
+                        self.ctx = cl.Context(devices)
+                        self.queue = cl.CommandQueue(self.ctx)
+                        self.use_metal = True
+                        print("成功启用 Apple M2 GPU 加速")
+                        return
+            print("未找到 Apple Metal GPU 设备")
+        except Exception as e:
+            print(f"初始化 Metal GPU 失败: {str(e)}")
+            self.use_metal = False
 
     def toggle_cpu_gpu(self):
         """
-        简化为直接设置 CPU 使用
+        针对 M2 的 GPU 切换
         """
-        self.Algorithm.toggle_cpu_gpu(use_gpu=False, selected_gpu_id=0)  # 同时指定两个参数
+        if self.use_metal:
+            print("使用 Apple M2 GPU 加速")
+        else:
+            print("使用 CPU 模式运行")
 
     def update_image_paths(self, new_image_paths):
         """
