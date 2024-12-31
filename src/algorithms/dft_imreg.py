@@ -1,7 +1,6 @@
 import math
 import cv2
 import numpy as np
-import pyfftw.interfaces.numpy_fft as fft
 import scipy.ndimage as ndi
 
 def get_apofield(shape, aporad):
@@ -53,15 +52,31 @@ def _phase_correlation(im0, im1, callback=None, *args):
     if callback is None:
         callback = _argmax2D
 
-    # TODO: Implement some form of high-pass filtering of PHASE correlation
-    f0, f1 = [fft.fft2(arr) for arr in (im0, im1)]
-    # spectrum can be filtered (already),
-    # so we have to take precaution against dividing by 0
-    eps = abs(f1).max() * 1e-15
-    # cps == cross-power spectrum of im0 and im1
-    cps = abs(fft.ifft2((f0 * f1.conjugate()) / (abs(f0) * abs(f1) + eps)))
-    # scps = shifted cps
-    scps = fft.fftshift(cps)
+    # # TODO: Implement some form of high-pass filtering of PHASE correlation
+    # f0, f1 = [fft.fft2(arr) for arr in (im0, im1)]
+    # # spectrum can be filtered (already),
+    # # so we have to take precaution against dividing by 0
+    # eps = abs(f1).max() * 1e-15
+    # # cps == cross-power spectrum of im0 and im1
+    # cps = abs(fft.ifft2((f0 * f1.conjugate()) / (abs(f0) * abs(f1) + eps)))
+    # # scps = shifted cps
+    # scps = fft.fftshift(cps)
+
+    # 计算二维傅里叶变换
+    f0 = np.fft.fft2(im0)
+    f1 = np.fft.fft2(im1)
+
+    # 避免除以零
+    eps = np.abs(f1).max() * 1e-15
+
+    # 计算交叉功率谱，保持大小不变
+    cps = np.fft.ifft2((f0 * f1.conjugate()) / (np.abs(f0) * np.abs(f1) + eps))
+
+    # 取绝对值并保持大小不变
+    cps = np.abs(cps)
+    
+    # 将交叉功率谱中心化
+    scps = np.fft.fftshift(cps)
 
     (t0, t1), success = callback(scps, *args)
     ret = np.array((t0, t1))
