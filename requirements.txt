@@ -1,14 +1,13 @@
-# Pure UI requirements
-pyside6_essentials==6.4.2
-qt-material==2.14
-
 # Algorithm requirements
-opencv-python-headless==4.7.0.68 # TODO: Test if working on windows. Otherwise revert back to "opencv-python"
-numpy==1.23.5
-numba==0.56.4
+opencv-python-headless # TODO: Test if working on windows. Otherwise revert back to "opencv-python"
+numpy
+numba
 rawpy
-imageio==2.29.0
-MarkupSafe==2.1.2
+imageio
+pyfftw
 
 # TODO: Check if really needed (used for image alignment)
-scipy==1.10.0 # 1.8.0 gives error on mac pyinstaller build
+scipy # 1.8.0 gives error on mac pyinstaller build
+
+# Package
+# MarkupSafe==2.1.2
