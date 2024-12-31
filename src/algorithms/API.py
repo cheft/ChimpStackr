@@ -3,15 +3,9 @@
 """
 import time
 import numpy as np
-try:
-    import pyopencl as cl  # 用于 Metal 支持
-except ImportError:
-    print("PyOpenCL 未安装，将使用 CPU 模式运行")
-
 import utilities as utilities
-import algorithms as algorithms
+import src.algorithms as algorithms
 import settings as settings
-
 
 class LaplacianPyramid:
     def __init__(self, fusion_kernel_size=6, pyramid_num_levels=8):
@@ -24,51 +18,18 @@ class LaplacianPyramid:
         self.fusion_kernel_size = fusion_kernel_size
         self.pyramid_num_levels = pyramid_num_levels
 
-        self.use_metal = False
-        # M2 GPU 支持
-        self.init_metal()
-
-    def init_metal(self):
-        """
-        初始化 Metal GPU 支持
-        """
-        try:
-            platforms = cl.get_platforms()
-            for platform in platforms:
-                if 'Apple' in platform.name:
-                    devices = platform.get_devices()
-                    if devices:
-                        self.ctx = cl.Context(devices)
-                        self.queue = cl.CommandQueue(self.ctx)
-                        self.use_metal = True
-                        print("成功启用 Apple M2 GPU 加速")
-                        return
-            print("未找到 Apple Metal GPU 设备")
-        except Exception as e:
-            print(f"初始化 Metal GPU 失败: {str(e)}")
-            self.use_metal = False
-
-    def toggle_cpu_gpu(self):
-        """
-        针对 M2 的 GPU 切换
-        """
-        if self.use_metal:
-            print("使用 Apple M2 GPU 加速")
-        else:
-            print("使用 CPU 模式运行")
-
     def update_image_paths(self, new_image_paths):
         """
         Set new image paths (sorted by name).
         """
         self.image_paths = sorted(new_image_paths, key=utilities.int_string_sorting)
 
+
     def align_and_stack_images(self):
         """
         对齐和堆叠图像
         移除了 signals 参数和进度信号
         """
-        self.toggle_cpu_gpu()
         aligned_images = [
             self.Algorithm.align_image_pair(self.image_paths[0], self.image_paths[0])
         ]
@@ -94,13 +55,6 @@ class LaplacianPyramid:
                 fused_pyr, new_pyr, self.fusion_kernel_size
             )
 
-        if self.Algorithm.useGpu:
-            inter_pyr = []
-            for i in fused_pyr:
-                inter_pyr.append(i.copy_to_host())
-            fused_pyr = inter_pyr
-            del inter_pyr
-            
         fused_image = self.Algorithm.reconstruct_pyramid(fused_pyr)
         self.output_image = fused_image
         return self.output_image
@@ -109,7 +63,6 @@ class LaplacianPyramid:
         """
         Stack images.
         """
-        self.toggle_cpu_gpu()
         # Will just load first image from path
         im0 = self.Algorithm.align_image_pair(self.image_paths[0], self.image_paths[0])
         fused_pyr = self.Algorithm.generate_laplacian_pyramid(

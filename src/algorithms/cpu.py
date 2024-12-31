@@ -136,6 +136,7 @@ def generate_laplacian_pyramid(img, num_levels):
 
         laplacian = np.subtract(gaussian_pyr[i - 1], gaussian_expanded)
         laplacian_pyr.append(laplacian)
+        
     return laplacian_pyr
 
 
@@ -150,4 +151,6 @@ def reconstruct_pyramid(laplacian_pyr):
         laplacian_top = cv2.add(laplacian_pyr[i + 1], laplacian_expanded)
 
         laplacian_lst.append(laplacian_top)
+    # iowrite laplacian
+    # cv2.imwrite(f"reconstruct{i}.jpg", laplacian_top)
     return laplacian_lst[num_levels]
