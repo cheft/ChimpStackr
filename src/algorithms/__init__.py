@@ -2,9 +2,9 @@
     Main pyramid stacking + image alignment algorithm(s).
 """
 import cv2
-import src.algorithms.dft_imreg as dft_imreg
-import src.ImageLoadingHandler as ImageLoadingHandler
-import src.algorithms.cpu as CPU
+import algorithms.dft_imreg as dft_imreg
+import ImageLoadingHandler as ImageLoadingHandler
+import algorithms.cpu as CPU
 
 class Algorithm:
     def __init__(self):

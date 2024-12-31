@@ -4,7 +4,7 @@
 import time
 import numpy as np
 import utilities as utilities
-import src.algorithms as algorithms
+import algorithms as algorithms
 import settings as settings
 
 class LaplacianPyramid:

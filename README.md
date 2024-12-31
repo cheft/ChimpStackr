@@ -58,6 +58,21 @@ python3 src/main.py samples/2160/1.png samples/2160/2.png samples/2160/5.png -o 
 
 python3 src/main.py samples/2160/1.png samples/2160/2.png samples/2160/5.png samples/2160/3.png samples/2160/4.png -o result.png -k 6 -p 8
 
-python3.12 src/main.py samples/examples/zoom/Gibbaranea-01.jpg samples/examples/zoom/Gibbaranea-02.jpg samples/examples/zoom/Gibbaranea-03.jpg -o result.png -k 6 -p 8
+pyenv install 3.11 && pyenv global 3.11
+
+export PATH="$HOME/.pyenv/bin:$PATH"
+eval "$(pyenv init --path)"
+eval "$(pyenv init -)"
+source ~/.zshrc  # or ~/.zshrc, depending on your shell
+
+python3 --version
+
+python3 -m venv ~/.my311env
+
+source ~/.my311env/bin/activate
+pip3 install -r requirements.txt
+
+
+source ~/.my312env/bin/active
 
 ```
