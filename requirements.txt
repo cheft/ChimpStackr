@@ -7,7 +7,7 @@ imageio
 #pyfftw
 
 # TODO: Check if really needed (used for image alignment)
-scipy # 1.8.0 gives error on mac pyinstaller build
+# scipy # 1.8.0 gives error on mac pyinstaller build
 
 # Package
 # MarkupSafe==2.1.2

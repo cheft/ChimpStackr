@@ -1,7 +1,39 @@
 import math
 import cv2
 import numpy as np
-import scipy.ndimage as ndi
+# import scipy.ndimage as ndi
+
+def minimum_filter_numpy(array, size):
+    """
+    Apply a minimum filter to a 2D array using a sliding window approach.
+    
+    Parameters:
+    - array: 2D numpy array to be filtered.
+    - size: Size of the window (must be an odd integer).
+    
+    Returns:
+    - filtered_array: 2D numpy array after applying the minimum filter.
+    """
+    # Ensure the size is odd
+    if size % 2 == 0:
+        raise ValueError("Size must be an odd integer.")
+    
+    # Pad the array to handle borders
+    pad_width = size // 2
+    padded_array = np.pad(array, pad_width, mode='edge')
+    
+    # Prepare an output array
+    filtered_array = np.empty_like(array)
+    
+    # Iterate over each element in the array
+    for i in range(array.shape[0]):
+        for j in range(array.shape[1]):
+            # Extract the local window
+            local_window = padded_array[i:i+size, j:j+size]
+            # Compute the minimum value in the local window
+            filtered_array[i, j] = np.min(local_window)
+    
+    return filtered_array
 
 def get_apofield(shape, aporad):
     """
@@ -203,7 +235,8 @@ def argmax_translation(array, filter_pcorr, constraints=None):
     # it won't get changed inadvertently
     array_orig = array.copy()
     if filter_pcorr > 0:
-        array = ndi.minimum_filter(array, filter_pcorr)
+        # array = ndi.minimum_filter(array, filter_pcorr)
+        array = minimum_filter_numpy(array, filter_pcorr)
 
     ashape = np.array(array.shape, int)
     mask = np.ones(ashape, float)
