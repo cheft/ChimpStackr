@@ -58,6 +58,8 @@ python3 src/main.py samples/2160/1.png samples/2160/2.png samples/2160/5.png -o 
 
 python3 src/main.py samples/2160/1.png samples/2160/2.png samples/2160/5.png samples/2160/3.png samples/2160/4.png -o result.png -k 6 -p 8
 
+python3 src/main.py samples/examples/zoom/Gibbaranea-01.jpg samples/examples/zoom/Gibbaranea-02.jpg samples/examples/zoom/Gibbaranea-03.jpg -o result.jpg -k 6 -p 8
+
 pyenv install 3.11 && pyenv global 3.11
 
 export PATH="$HOME/.pyenv/bin:$PATH"
@@ -75,4 +77,13 @@ pip3 install -r requirements.txt
 
 source ~/.my312env/bin/active
 
+py2wasm src/main.py -o myapp.wasm
+wasmer run  myapp.wasm
+
+
+
+
+lldb ./bin/MyFocusStack
+run
+bt
 ```
