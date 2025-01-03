@@ -112,7 +112,7 @@ cv::Point2d argmax_ext(const cv::Mat& array, double exponent) {
         for (int i = 0; i < array.rows; ++i) {
             for (int j = 0; j < array.cols; ++j) {
                 ncArray(i, j) = array.at<double>(i, j);
-                printf("array.at<double>(i, j): %f\n", array.at<double>(i, j));
+                // printf("array.at<double>(i, j): %f\n", array.at<double>(i, j));
             }
             printf("\n");
         }
@@ -587,12 +587,11 @@ std::vector<cv::Mat> gaussian_pyramid(const cv::Mat& img, int num_levels) {
     cv::Mat lower = img.clone();
     std::vector<cv::Mat> gaussian_pyr;
     gaussian_pyr.push_back(lower);
-
     for (int i = 0; i < num_levels; ++i) {
         cv::pyrDown(lower, lower);
         gaussian_pyr.push_back(lower);
     }
-
+  
     return gaussian_pyr;
 }
 
@@ -607,25 +606,11 @@ std::vector<cv::Mat> generate_laplacian_pyramid(const cv::Mat& img, int num_leve
         cv::Mat gaussian_expanded;
         cv::pyrUp(gaussian_pyr[i], gaussian_expanded, gaussian_pyr[i - 1].size());
 
-        // 使用 NumCpp 实现 np.subtract
-        nc::NdArray<double> nc_gaussian_pyr_prev(gaussian_pyr[i - 1].rows, gaussian_pyr[i - 1].cols);
-        nc::NdArray<double> nc_gaussian_expanded(gaussian_expanded.rows, gaussian_expanded.cols);
+        // 使用 OpenCV 的逐元素操作
+        cv::Mat laplacian;
+        cv::subtract(gaussian_pyr[i - 1], gaussian_expanded, laplacian);
 
-        for (int row = 0; row < gaussian_pyr[i - 1].rows; ++row) {
-            for (int col = 0; col < gaussian_pyr[i - 1].cols; ++col) {
-                nc_gaussian_pyr_prev(row, col) = static_cast<double>(gaussian_pyr[i - 1].at<float>(row, col));
-                nc_gaussian_expanded(row, col) = static_cast<double>(gaussian_expanded.at<float>(row, col));
-            }
-        }
-
-        nc::NdArray<double> nc_laplacian = nc_gaussian_pyr_prev - nc_gaussian_expanded;
-
-        cv::Mat laplacian(gaussian_pyr[i - 1].size(), CV_32F);
-        for (int row = 0; row < laplacian.rows; ++row) {
-            for (int col = 0; col < laplacian.cols; ++col) {
-                laplacian.at<float>(row, col) = static_cast<float>(nc_laplacian(row, col));
-            }
-        }
+        std::cout << "laplacian[1] size: " << laplacian.size() << ", channels: " << laplacian.channels() << ", type: " << laplacian.type() << std::endl;
 
         laplacian_pyr.push_back(laplacian);
     }
@@ -644,16 +629,7 @@ cv::Mat reconstruct_pyramid(const std::vector<cv::Mat>& laplacian_pyr) {
         cv::Size size(laplacian_pyr[i + 1].cols, laplacian_pyr[i + 1].rows);
         cv::Mat laplacian_expanded;
         cv::pyrUp(laplacian_top, laplacian_expanded, size);
-        std::cout << "laplacian_expanded size: " << laplacian_expanded.size() << ", channels: " << laplacian_expanded.channels() << std::endl;
-        std::cout << "laplacian_pyr size: " << laplacian_pyr[i + 1].size() << ", channels: " << laplacian_pyr[i + 1].channels() << std::endl;
-        
-        // if (laplacian_pyr[i + 1].channels() == 1) {
-        //     cv::Mat converted;
-        //     cv::cvtColor(laplacian_pyr[i + 1], converted, cv::COLOR_GRAY2BGR);
-        //     laplacian_top = converted + laplacian_expanded;
-        // } else {
         laplacian_top = laplacian_pyr[i + 1] + laplacian_expanded;
-        // }
         laplacian_lst.push_back(laplacian_top);
     }
 
