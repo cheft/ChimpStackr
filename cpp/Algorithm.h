@@ -28,5 +28,6 @@ double get_deviation(const cv::Mat& matrix);
 cv::Mat compute_focusmap(const cv::Mat& pyr_level1, const cv::Mat& pyr_level2, int kernel_size);
 cv::Mat fuse_pyramid_levels_using_focusmap(cv::Mat& pyr_level1, const cv::Mat& pyr_level2, const cv::Mat& focusmap);
 std::vector<cv::Mat> focus_fuse_pyramid_pair(const std::vector<cv::Mat>& pyr1, const std::vector<cv::Mat>& pyr2, int kernel_size);
+cv::Mat reconstruct_pyramid(const std::vector<cv::Mat>& laplacian_pyr);
 
 #endif // ALGORITHM_H

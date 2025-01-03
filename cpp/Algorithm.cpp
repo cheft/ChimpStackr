@@ -633,6 +633,33 @@ std::vector<cv::Mat> generate_laplacian_pyramid(const cv::Mat& img, int num_leve
     return laplacian_pyr;
 }
 
+cv::Mat reconstruct_pyramid(const std::vector<cv::Mat>& laplacian_pyr) {
+    cv::Mat laplacian_top = laplacian_pyr[0];
+
+    std::vector<cv::Mat> laplacian_lst;
+    laplacian_lst.push_back(laplacian_top);
+    int num_levels = laplacian_pyr.size() - 1;
+
+    for (int i = 0; i < num_levels; ++i) {
+        cv::Size size(laplacian_pyr[i + 1].cols, laplacian_pyr[i + 1].rows);
+        cv::Mat laplacian_expanded;
+        cv::pyrUp(laplacian_top, laplacian_expanded, size);
+        std::cout << "laplacian_expanded size: " << laplacian_expanded.size() << ", channels: " << laplacian_expanded.channels() << std::endl;
+        std::cout << "laplacian_pyr size: " << laplacian_pyr[i + 1].size() << ", channels: " << laplacian_pyr[i + 1].channels() << std::endl;
+        
+        // if (laplacian_pyr[i + 1].channels() == 1) {
+        //     cv::Mat converted;
+        //     cv::cvtColor(laplacian_pyr[i + 1], converted, cv::COLOR_GRAY2BGR);
+        //     laplacian_top = converted + laplacian_expanded;
+        // } else {
+        laplacian_top = laplacian_pyr[i + 1] + laplacian_expanded;
+        // }
+        laplacian_lst.push_back(laplacian_top);
+    }
+
+    return laplacian_lst[num_levels];
+}
+
 cv::Point2d translation(const cv::Mat &im0, const cv::Mat &im1, int filter_pcorr = 0, double odds = 1, const std::map<std::string, std::pair<int, int>> &constraints = {})
 {
   double angle = 0;

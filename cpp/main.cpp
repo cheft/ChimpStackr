@@ -5,18 +5,22 @@
 #include <opencv2/opencv.hpp>
 #include "NumCpp.hpp"
 #include "Algorithm.h" // 包含 Algorithm.h 头文件
+#include <chrono>
 
 // using namespace nc; // Use NumCpp namespace
 
 // main function, open cv hello world
 int main(int argc, char** argv) {
+    auto start = std::chrono::high_resolution_clock::now();
+
     auto pyramid_num_levels = 8;
     auto fusion_kernel_size = 6;
 
     auto image_paths = [] {
         std::vector<std::string> paths;
         for (int i = 1; i < 3; ++i) {
-            paths.push_back("/Users/chenhaifeng/Documents/Study/python/ChimpStackr/samples/examples/zoom/Gibbaranea-0" + std::to_string(i) + ".jpg");
+            // paths.push_back("/Users/chenhaifeng/Documents/Study/python/ChimpStackr/samples/examples/zoom/Gibbaranea-0" + std::to_string(i) + ".jpg");
+            paths.push_back("/Users/chenhaifeng/Documents/Study/python/ChimpStackr/samples/2160/" + std::to_string(i) + ".png");
         }
         return paths;
     }();
@@ -43,14 +47,32 @@ int main(int argc, char** argv) {
         // cv::waitKey(0);
 
         aligned_images.erase(aligned_images.begin());
-
-    
         fused_pyr = focus_fuse_pyramid_pair(fused_pyr, new_pyr, fusion_kernel_size);
     }
 
-    // auto fused_image = reconstruct_pyramid(fused_pyr);
+    std::vector<cv::Mat> new_fused_pyr;
+    for (auto &pyr : fused_pyr) { // TODO: channels 3, 1 1 1 1... & type are diff, 16, 21 21 21 ...
+        cv::Mat temp;
+        if (pyr.channels() == 1) {
+            cv::cvtColor(pyr, temp, cv::COLOR_GRAY2BGR);
+        } else {
+            temp = pyr;
+        }
+        if (temp.type() != CV_32FC3) {
+            temp.convertTo(temp, CV_32FC3);
+        }
+        new_fused_pyr.push_back(temp);
+        std::cout << "temp size: " << temp.size() << ", channels: " << temp.channels() << ", type: " << temp.type() << std::endl;
+    }
+    auto fused_image = reconstruct_pyramid(new_fused_pyr);
 
-    // cv::imshow("Display window", image);
-    // cv::waitKey(0);
+
+    auto end = std::chrono::high_resolution_clock::now();
+    // 计算耗时，单位为毫秒
+    std::chrono::duration<double, std::milli> duration = end - start;
+    std::cout << "Function execution time: " << duration.count() << " ms" << std::endl;
+
+    cv::imshow("Display window", fused_image);
+    cv::waitKey(0);
     return 0;
 }
