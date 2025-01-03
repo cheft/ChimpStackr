@@ -2,6 +2,8 @@
 #define ALGORITHM_H
 #include <opencv2/core/core.hpp>
 #include <opencv2/opencv.hpp>
+#include <fftw3.h> 
+#include "NumCpp.hpp"
 #include <string>
 
 cv::Mat get_apofield(const cv::Size &shape, int aporad);
@@ -19,5 +21,7 @@ cv::Point2d translation(const cv::Mat &im0, const cv::Mat &im1, int filter_pcorr
 cv::Mat read_image_from_path(const std::string &path);
 cv::Mat register_image_translation(const cv::Mat &im0, const cv::Mat &im1, double scale_factor);
 cv::Mat align_image_pair(const std::string &ref_im_path, const std::string &im_to_align_path);
+std::vector<cv::Mat> gaussian_pyramid(const cv::Mat& img, int num_levels);
+std::vector<cv::Mat> generate_laplacian_pyramid(const cv::Mat& img, int num_levels);
 
 #endif // ALGORITHM_H

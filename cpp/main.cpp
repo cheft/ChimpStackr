@@ -29,8 +29,10 @@ int main(int argc, char** argv) {
     }();
 
     std::vector<cv::Mat> aligned_images;
-    aligned_images.push_back(align_image_pair(image_paths[0], image_paths[0]));
-    // auto fused_pyr = generate_laplacian_pyramid(aligned_images[0], pyramid_num_levels);
+    aligned_images.push_back(read_image_from_path(image_paths[0]));
+    // aligned_images.push_back(align_image_pair(image_paths[0], image_paths[1]));
+
+    auto fused_pyr = generate_laplacian_pyramid(aligned_images[0], 8);
 
     // for (size_t i = 1; i < image_paths.size(); ++i) {
     //     std::cout << "Processing image " << i + 1 << "/" << image_paths.size() << "..." << std::endl;

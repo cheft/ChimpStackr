@@ -15,9 +15,11 @@ find_package(OpenCV REQUIRED)
 
 # 查找Boost库
 find_package(Boost REQUIRED)
-
 # 包含Boost目录
 include_directories(${Boost_INCLUDE_DIRS})
+
+find_package(FFTW3 REQUIRED)
+include_directories(${FFTW3_INCLUDE_DIRS})
 
 # Include NumCpp
 include_directories(/usr/local/include) # Adjust this path
@@ -26,7 +28,7 @@ include_directories(/usr/local/include) # Adjust this path
 add_executable(MyFocusStack main.cpp Algorithm.cpp)
 
 # Link the OpenCV libraries
-target_link_libraries(MyFocusStack ${OpenCV_LIBS})
+target_link_libraries(MyFocusStack ${OpenCV_LIBS} ${FFTW3_LIBRARIES})
 
 # If using NumCpp, link any required libraries
 # target_link_libraries(MyFocusStack numcpp) # Uncomment this if NumCpp requires linking

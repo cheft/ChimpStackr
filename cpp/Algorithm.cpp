@@ -2,12 +2,13 @@
 #include <opencv2/opencv.hpp>
 #include <opencv2/imgproc/imgproc.hpp>
 #include <opencv2/highgui/highgui.hpp>
+#include <fftw3.h> 
+#include "NumCpp.hpp"
 #include <cmath>
 #include <vector>
 #include <algorithm>
 #include <stdexcept>
 #include <string>
-
 
 cv::Mat get_apofield(const cv::Size &shape, int aporad)
 {
@@ -15,8 +16,13 @@ cv::Mat get_apofield(const cv::Size &shape, int aporad)
   {
     return cv::Mat::ones(shape, CV_64F);
   }
+  // 手动生成汉宁窗
+  cv::Mat apos(aporad * 2, 1, CV_64F);
+  for (int i = 0; i < apos.rows; ++i)
+  {
+      apos.at<double>(i, 0) = 0.5 * (1 - cos(2 * CV_PI * i / (aporad * 2 - 1)));
+  }
 
-  cv::Mat apos = cv::getGaussianKernel(aporad * 2, -1, CV_64F);
   std::vector<cv::Mat> vecs;
 
   for (int dim : {shape.width, shape.height})
@@ -31,17 +37,39 @@ cv::Mat get_apofield(const cv::Size &shape, int aporad)
     apos.rowRange(0, aporad).copyTo(toapp.rowRange(dim - aporad, dim));
     vecs.push_back(toapp);
   }
+  
+  cv::Mat apofield = vecs[1] * vecs[0].t(); // 生成矩阵，这里跟 python 的宽高是反的
 
-  cv::Mat apofield = vecs[0] * vecs[1].t();
   return apofield;
+}
+
+std::vector<int> unravel_index(int index, const std::vector<int>& shape) {
+    int size = shape.size();
+    std::vector<int> indices(size);
+    for (int i = size - 1; i >= 0; --i) {
+        indices[i] = index % shape[i];
+        index /= shape[i];
+    }
+    return indices;
 }
 
 cv::Point argmax2D(const cv::Mat &array)
 {
-  cv::Point max_loc;
-  cv::minMaxLoc(array, nullptr, nullptr, nullptr, &max_loc);
+    // 将 cv::Mat 转换为 NumCpp 的 NdArray
+    nc::NdArray<double> ncArray(array.rows, array.cols);
+    for (int i = 0; i < array.rows; ++i) {
+        for (int j = 0; j < array.cols; ++j) {
+            ncArray(i, j) = array.at<double>(i, j);
+        }
+    }
 
-  return max_loc;
+    // 找到最大值的索引
+    auto amax = nc::argmax(ncArray).item();
+
+    // 将一维索引转换为二维索引
+    auto ret = unravel_index(amax, {static_cast<int>(ncArray.shape().rows), static_cast<int>(ncArray.shape().cols)});
+
+    return cv::Point(ret[1], ret[0]);
 }
 
 
@@ -76,21 +104,54 @@ cv::Mat minimum_filter(const cv::Mat &array, int size)
 cv::Point2d argmax_ext(const cv::Mat& array, double exponent) {
     cv::Point2d ret;
     if (exponent == std::numeric_limits<double>::infinity()) {
+        printf("exponent is infinity\n");
         ret = argmax2D(array);
     } else {
-        cv::Mat col = cv::Mat::zeros(array.rows, 1, CV_64F);
-        cv::Mat row = cv::Mat::zeros(1, array.cols, CV_64F);
-        for (int i = 0; i < array.rows; ++i) col.at<double>(i, 0) = i;
-        for (int j = 0; j < array.cols; ++j) row.at<double>(0, j) = j;
+        // 使用 NumCpp 实现计算
+        nc::NdArray<double> ncArray(array.rows, array.cols);
+        for (int i = 0; i < array.rows; ++i) {
+            for (int j = 0; j < array.cols; ++j) {
+                ncArray(i, j) = array.at<double>(i, j);
+                printf("array.at<double>(i, j): %f\n", array.at<double>(i, j));
+            }
+            printf("\n");
+        }
 
-        cv::Mat arr2;
-        cv::pow(array, exponent, arr2);
-        double arrsum = cv::sum(arr2)[0];
+        // col = np.arange(array.shape[0])[:, np.newaxis]
+        // row = np.arange(array.shape[1])[np.newaxis, :]
+
+        // arr2 = array**exponent
+        // arrsum = arr2.sum()
+        // if arrsum == 0:
+        //     # We have to return SOMETHING, so let's go for (0, 0)
+        //     return np.zeros(2)
+        // arrprody = np.sum(arr2 * col) / arrsum
+        // arrprodx = np.sum(arr2 * row) / arrsum
+        // ret = [arrprody, arrprodx]
+        // print("ret 1111", ret)
+
+        auto col = nc::arange<double>(0, array.rows).reshape(array.rows, 1);
+        auto row = nc::arange<double>(0, array.cols).reshape(1, array.cols);
+
+        auto arr2 = nc::power(ncArray, exponent);
+        // std::cout << "Array using manual iteration:" << std::endl;
+        // for (int row = 0; row < arr2.numRows(); ++row)
+        // {
+        //     for (int col = 0; col < arr2.numCols(); ++col)
+        //     {
+        //         std::cout << arr2(row, col) << " ";
+        //     }
+        //     std::cout << std::endl;
+        // }
+
+        double arrsum = nc::sum(arr2).item();
+        printf("arrsum: %f\n", arrsum);
         if (arrsum == 0) {
             return cv::Point2d(0, 0);
         }
-        double arrprody = cv::sum(arr2.mul(col))[0] / arrsum;
-        double arrprodx = cv::sum(arr2.mul(row))[0] / arrsum;
+        double arrprody = nc::sum(arr2 * col).item() / arrsum;
+        double arrprodx = nc::sum(arr2 * row).item() / arrsum;
+        
         ret = cv::Point2d(arrprody, arrprodx);
     }
     return ret;
@@ -98,16 +159,32 @@ cv::Point2d argmax_ext(const cv::Mat& array, double exponent) {
 
 cv::Mat get_subarr(const cv::Mat& array, const cv::Point& center, int rad) {
     int dim = 1 + 2 * rad;
-    cv::Mat subarr = cv::Mat::zeros(dim, dim, array.type());
-    cv::Point corner = center - cv::Point(rad, rad);
-    for (int ii = 0; ii < dim; ++ii) {
-        int yidx = (corner.y + ii + array.rows) % array.rows;
-        for (int jj = 0; jj < dim; ++jj) {
-            int xidx = (corner.x + jj + array.cols) % array.cols;
-            subarr.at<double>(ii, jj) = array.at<double>(yidx, xidx);
+    nc::NdArray<double> ncArray(array.rows, array.cols);
+    for (int i = 0; i < array.rows; ++i) {
+        for (int j = 0; j < array.cols; ++j) {
+            ncArray(i, j) = array.at<double>(i, j);
         }
     }
-    return subarr;
+
+    nc::NdArray<double> subarr = nc::zeros<double>(dim, dim);
+    nc::NdArray<int> corner = nc::NdArray<int>({center.y, center.x}) - rad;
+
+    for (int ii = 0; ii < dim; ++ii) {
+        int yidx = (corner[0] + ii + ncArray.shape().rows) % ncArray.shape().rows;
+        for (int jj = 0; jj < dim; ++jj) {
+            int xidx = (corner[1] + jj + ncArray.shape().cols) % ncArray.shape().cols;
+            subarr(ii, jj) = ncArray(yidx, xidx);
+        }
+    }
+
+    cv::Mat result(dim, dim, array.type());
+    for (int i = 0; i < dim; ++i) {
+        for (int j = 0; j < dim; ++j) {
+            result.at<double>(i, j) = subarr(i, j);
+        }
+    }
+
+    return result;
 }
 
 
@@ -121,8 +198,13 @@ double get_success(const cv::Mat& array, const cv::Point2d& coord, int radius = 
 
 cv::Point2d interpolate(const cv::Mat& array, const cv::Point2d& rough, int rad = 2) {
     cv::Point rough_int = cv::Point(cvRound(rough.x), cvRound(rough.y));
+   
     cv::Mat surroundings = get_subarr(array, rough_int, rad);
+
     cv::Point2d com = argmax_ext(surroundings, 1);
+    printf("com.x: %f\n", com.x);
+    printf("com.y: %f\n", com.y);
+
     cv::Point2d offset = com - cv::Point2d(rad, rad);
     cv::Point2d ret = rough + offset;
     ret += cv::Point2d(0.5, 0.5);
@@ -133,10 +215,12 @@ cv::Point2d interpolate(const cv::Mat& array, const cv::Point2d& rough, int rad 
 
 std::pair<cv::Point2d, double> argmax_translation(cv::Mat array, int filter_pcorr, std::map<std::string, std::pair<int, int>> constraints = {}) {
     if (constraints.empty()) {
+        printf("constraints is empty\n");
         constraints = {{"tx", {0, 0}}, {"ty", {0, 0}}};
     }
 
     if (filter_pcorr > 0) {
+        printf("filter_pcorr: %d\n", filter_pcorr);
         array = minimum_filter(array, filter_pcorr);
     }
 
@@ -187,40 +271,37 @@ std::pair<cv::Point2d, double> argmax_translation(cv::Mat array, int filter_pcor
             mask = mask.mul(vals);
         }
     }
-    // array = array.mul(mask);
-    try {
-        if (mask.channels() == 1 && array.channels() > 1) {
-            std::vector<cv::Mat> channels(array.channels(), mask);
-            cv::merge(channels, mask);
-        }
-        array = array.mul(mask);
-    } catch (const cv::Exception& e) {
-        std::cerr << "OpenCV exception1: " << e.what() << std::endl;
-    }
+    std::cout << "mask size: " << mask.size() << ", channels: " << mask.channels() << std::endl;
+    std::cout << "array size: " << array.size() << ", channels: " << array.channels() << std::endl;
 
-    int aporad = std::min(ashape.width, ashape.height) / 6;
+    array = array.mul(mask);
+    int aporad = std::min(ashape.width / 6, ashape.height / 6);
     cv::Mat mask2 = get_apofield(ashape, aporad);
-    // array = array.mul(mask2);
-    try {
-        if (mask2.channels() == 1 && array.channels() > 1) {
-            std::vector<cv::Mat> channels(array.channels(), mask2);
-            cv::merge(channels, mask2);
-        }
-        array = array.mul(mask2);
-    } catch (const cv::Exception& e) {
-        std::cerr << "OpenCV exception2: " << e.what() << std::endl;
-    }
+    std::cout << "mask2 size: " << mask2.size() << ", channels: " << mask2.channels() << std::endl;
+
+    array = array.mul(mask2);
 
     cv::Point2d tvec = argmax_ext(array, std::numeric_limits<double>::infinity());
-    try {
-      tvec = interpolate(array_orig, tvec);
-    } catch (const cv::Exception& e) {
-        std::cerr << "OpenCV exception3: " << e.what() << std::endl;
-    }
-    double success = get_success(array_orig, tvec, 2);
-    std::cout << "tvec: " << tvec << std::endl;
-    std::cout << "success: " << success << std::endl;
-    return {tvec, success};
+    
+    tvec = interpolate(array_orig, tvec);
+    printf("tvecx: %f\n", tvec.x);
+    printf("tvecy: %f\n", tvec.y);
+
+    std::cout << "---------------------" << std::endl;
+    return std::pair<cv::Point2d, double>(cv::Point2d(0, 0), 0.0);
+
+    // cv::Point2d tvec = argmax_ext(array, std::numeric_limits<double>::infinity());
+    // printf("tvecx: %f\n", tvec.x);
+    // printf("tvecy: %f\n", tvec.y);
+    // try {
+    //   tvec = interpolate(array_orig, tvec);
+    // } catch (const cv::Exception& e) {
+    //     std::cerr << "OpenCV exception3: " << e.what() << std::endl;
+    // }
+    // double success = get_success(array_orig, tvec, 2);
+    // std::cout << "tvec: " << tvec << std::endl;
+    // std::cout << "success: " << success << std::endl;
+    // return {tvec, success};
 }
 
 cv::Mat resize_image(const cv::Mat &im, double division_factor)
@@ -240,6 +321,8 @@ cv::Mat resize_image(const cv::Mat &im, double division_factor)
   cv::resize(im, resized_image, cv::Size(new_width, new_height));
   return resized_image;
 }
+
+
 
 void fftShift(const cv::Mat& input, cv::Mat& output) {
     output = input.clone();
@@ -264,6 +347,25 @@ void fftShift(const cv::Mat& input, cv::Mat& output) {
     tmp.copyTo(q2);
 }
 
+void printPartialMat(const cv::Mat& mat, int startRow, int endRow, int startCol, int endCol) {
+    // Ensure the specified range is within the matrix bounds
+    startRow = std::max(0, startRow);
+    endRow = std::min(mat.rows, endRow);
+    startCol = std::max(0, startCol);
+    endCol = std::min(mat.cols, endCol);
+
+    // Create a submatrix (ROI)
+    cv::Mat subMat = mat(cv::Range(startRow, endRow), cv::Range(startCol, endCol));
+
+    // Print the submatrix
+    for (int i = 0; i < subMat.rows; ++i) {
+        for (int j = 0; j < subMat.cols; ++j) {
+            std::cout << subMat.at<double>(i, j) << " ";
+        }
+        std::cout << std::endl;
+    }
+}
+
 std::pair<cv::Point2d, double> phase_correlation(
     const cv::Mat &im0, 
     const cv::Mat &im1, 
@@ -273,41 +375,243 @@ std::pair<cv::Point2d, double> phase_correlation(
     const std::map<std::string, std::pair<int, int>> &constraints = {}
 )
 {
-  // 将图像转换为浮点型
-  cv::Mat im0_float, im1_float;
-  im0.convertTo(im0_float, CV_32F);
-  im1.convertTo(im1_float, CV_32F);
+  // print(im0);
+  // std::cout << "\n\n" << std::endl;
+  // print(im1);
+  // 获取图像尺寸
 
-  cv::Mat f0, f1;
-  cv::dft(im0_float, f0, cv::DFT_COMPLEX_OUTPUT);
-  cv::dft(im1_float, f1, cv::DFT_COMPLEX_OUTPUT);
+  int rows = im0.rows;
+  int cols = im0.cols;
 
-  cv::Mat f0_conj;
-  cv::mulSpectrums(f0, f1, f0_conj, 0, true);
+  cv::Mat im0_double, im1_double;
+  im0.convertTo(im0_double, CV_64F);
+  im1.convertTo(im1_double, CV_64F);
 
-  cv::Mat cps;
-  cv::idft(f0_conj / (cv::abs(f0_conj) + 1e-15), cps, cv::DFT_SCALE | cv::DFT_REAL_OUTPUT);
+  // 创建 FFTW 计划
+  fftw_complex *f0 = (fftw_complex*) fftw_malloc(sizeof(fftw_complex) * rows * (cols / 2 + 1));
+  fftw_complex *f1 = (fftw_complex*) fftw_malloc(sizeof(fftw_complex) * rows * (cols / 2 + 1));
+  fftw_complex *cps = (fftw_complex*) fftw_malloc(sizeof(fftw_complex) * rows * (cols / 2 + 1));
+  double *ifft_result = (double*) fftw_malloc(sizeof(double) * rows * cols);
 
+  fftw_plan plan0 = fftw_plan_dft_r2c_2d(rows, cols, im0_double.ptr<double>(), f0, FFTW_ESTIMATE);
+  fftw_plan plan1 = fftw_plan_dft_r2c_2d(rows, cols, im1_double.ptr<double>(), f1, FFTW_ESTIMATE);
+  fftw_plan iplan = fftw_plan_dft_c2r_2d(rows, cols, cps, ifft_result, FFTW_ESTIMATE);
+
+  // 执行 FFT
+  fftw_execute(plan0);
+  fftw_execute(plan1);
+
+  // 打印 FFT 结果
+  // std::cout << "FFT of im0:" << std::endl;
+  // for (int i = 0; i < 4; ++i) {
+  //     for (int j = 0; j < 4 / 2 + 1; ++j) {
+  //         std::cout << "(" << f0[i * (cols / 2 + 1) + j][0] << ", " << f0[i * (cols / 2 + 1) + j][1] << ") ";
+  //     }
+  //     std::cout << std::endl;
+  // }
+
+  // std::cout << "FFT of im1:" << std::endl;
+  // for (int i = 0; i < 4; ++i) {
+  //     for (int j = 0; j < 4 / 2 + 1; ++j) {
+  //         std::cout << "(" << f1[i * (cols / 2 + 1) + j][0] << ", " << f1[i * (cols / 2 + 1) + j][1] << ") ";
+  //     }
+  //     std::cout << std::endl;
+  // }
+
+  double max_abs_f1 = 0.0;
+  for (int i = 0; i < rows; ++i) {
+      for (int j = 0; j < cols / 2 + 1; ++j) {
+          double real = f1[i * (cols / 2 + 1) + j][0];
+          double imag = f1[i * (cols / 2 + 1) + j][1];
+          double abs_value = std::sqrt(real * real + imag * imag);
+          if (abs_value > max_abs_f1) {
+              max_abs_f1 = abs_value;
+          }
+      }
+  }
+
+  // 计算 eps
+  double eps = max_abs_f1 * 1e-15;
+  std::cout << "Eps: " << eps << std::endl;
+
+  // 计算 cps = (f0 * conj(f1)) / (abs(f0) * abs(f1) + eps)
+  for (int i = 0; i < rows * (cols / 2 + 1); ++i) {
+      double abs_f0 = std::sqrt(f0[i][0] * f0[i][0] + f0[i][1] * f0[i][1]);
+      double abs_f1 = std::sqrt(f1[i][0] * f1[i][0] + f1[i][1] * f1[i][1]);
+
+      double conj_f1_real = f1[i][0];
+      double conj_f1_imag = -f1[i][1];
+
+      double numerator_real = f0[i][0] * conj_f1_real - f0[i][1] * conj_f1_imag;
+      double numerator_imag = f0[i][0] * conj_f1_imag + f0[i][1] * conj_f1_real;
+
+      double denominator = (abs_f0 * abs_f1) + eps;
+
+      cps[i][0] = numerator_real / denominator;
+      cps[i][1] = numerator_imag / denominator;
+  }
+
+  // 执行逆 FFT
+  fftw_execute(iplan);
+
+   // 归一化逆 FFT 结果
+  cv::Mat cps_mat(rows, cols, CV_64F, ifft_result);
+  cps_mat /= (rows * cols);
+
+  // 频谱移位
   cv::Mat scps;
-  // cv::fftShift(cps, scps);
-  fftShift(cps, scps);
+  fftShift(cps_mat, scps);
 
-  // if (callback_name == "argmax2D") {
-  //   cv::Point max_loc = argmax2D(scps);
-  // } else if (callback_name == "argmax_translation") {
+  // 归一化并显示
+  // cv::Mat display;
+  // cv::normalize(cps_mat, display, 0, 1, cv::NORM_MINMAX); 这个归一化会影响图片显示
+
+  // cv::imshow("cps", scps);
+  // cv::waitKey(0);
+  // 以上是 OK 的
+
+
 
   std::pair<cv::Point2d, double> pd = argmax_translation(scps, filter_pcorr, constraints);
   cv::Point2d max_loc = pd.first;
   double success = pd.second;
 
+  // 计算逆 FFT 结果的绝对值并找到最大值
+  // double max_cps = 0.0;
+  // cv::Point2d max_loc(0, 0);
+  // for (int i = 0; i < rows; ++i) {
+  //     for (int j = 0; j < cols; ++j) {
+  //         double value = im0.at<double>(i, j); // 使用 im0 作为输出缓冲区
+  //         if (value > max_cps) {
+  //             max_cps = value;
+  //             max_loc = cv::Point2d(j, i);
+  //         }
+  //     }
   // }
-  // cv::Point max_loc = callback(scps);
-  // double success = scps.at<double>(max_loc);
+  
+   // 清理
+  fftw_destroy_plan(plan0);
+  fftw_destroy_plan(plan1);
+  fftw_destroy_plan(iplan);
+  fftw_free(f0);
+  fftw_free(f1);
+  fftw_free(cps);
+  fftw_free(ifft_result);
+  fftw_cleanup();
 
-  max_loc.x -= f0.cols / 2;
-  max_loc.y -= f0.rows / 2;
+  // 这里可以进行相位相关计算
+  // 例如，计算 f0 和 f1 的共轭乘积，然后进行逆 FFT
 
-  return {cv::Point2d(max_loc), success};
+  // 返回一个占位符结果
+  return std::make_pair(cv::Point2d(0, 0), 0.0);
+  
+  // cv::Mat im0_double, im1_double;
+  // im0.convertTo(im0_double, CV_64F);
+  // im1.convertTo(im1_double, CV_64F);
+
+  // // Get the size of the input images
+  // int rows = im0.rows;
+  // int cols = im0.cols;
+
+  // // Allocate memory for FFTW
+  // fftw_complex *f0 = (fftw_complex*) fftw_malloc(sizeof(fftw_complex) * rows * cols);
+  // fftw_complex *f1 = (fftw_complex*) fftw_malloc(sizeof(fftw_complex) * rows * cols);
+  // fftw_complex *cps = (fftw_complex*) fftw_malloc(sizeof(fftw_complex) * rows * cols);
+
+  // // Create FFTW plans
+  // fftw_plan plan_f0 = fftw_plan_dft_r2c_2d(rows, cols, im0_double.ptr<double>(), f0, FFTW_ESTIMATE);
+  // fftw_plan plan_f1 = fftw_plan_dft_r2c_2d(rows, cols, im1_double.ptr<double>(), f1, FFTW_ESTIMATE);
+  // fftw_plan plan_cps = fftw_plan_dft_c2r_2d(rows, cols, cps, im0_double.ptr<double>(), FFTW_ESTIMATE);
+
+  // // Execute FFT
+  // fftw_execute(plan_f0);
+  // fftw_execute(plan_f1);
+
+  // // Calculate cross power spectrum
+  // double eps = 1e-15;
+  // for (int i = 0; i < rows * cols; ++i) {
+  //     std::complex<double> F0(f0[i][0], f0[i][1]);
+  //     std::complex<double> F1(f1[i][0], f1[i][1]);
+  //     std::complex<double> conjF1 = std::conj(F1);
+  //     std::complex<double> denominator = std::abs(F0) * std::abs(F1) + eps;
+  //     std::complex<double> result = (F0 * conjF1) / denominator;
+  //     cps[i][0] = result.real();
+  //     cps[i][1] = result.imag();
+  // }
+
+  // // Execute inverse FFT
+
+  // cv::Mat cps_abs(rows, cols, CV_64F);
+
+  // // Execute inverse FFT
+  // fftw_execute_dft_c2r(plan_cps, cps, cps_abs.ptr<double>());
+
+  // cv::normalize(cps_abs, cps_abs, 0, 1, cv::NORM_MINMAX);
+
+  // printPartialMat(cps_abs, 0, 5, 0, 5);
+
+  // cv::Mat scps;
+  // fftShift(cps_abs, scps);
+  // // cv::fftshift(result, shifted_result);
+  // cv::imshow("scps c++", cps_abs);
+  // cv::waitKey(0);
+
+  // // if (callback_name == "argmax2D") {
+  // //   cv::Point max_loc = argmax2D(scps);
+  // // } else if (callback_name == "argmax_translation") {
+
+  // std::pair<cv::Point2d, double> pd = argmax_translation(scps, filter_pcorr, constraints);
+  // cv::Point2d max_loc = pd.first;
+  // double success = pd.second;
+
+  // // }
+  // // cv::Point max_loc = callback(scps);
+  // // double success = scps.at<double>(max_loc);
+
+  // max_loc.x -= cols / 2;
+  // max_loc.y -= rows / 2;
+
+  // fftw_destroy_plan(plan_f0);
+  // fftw_destroy_plan(plan_f1);
+  // fftw_destroy_plan(plan_cps);
+  // fftw_free(f0);
+  // fftw_free(f1);
+  // fftw_free(cps);
+  // printf("max_loc.x: %f\n", max_loc.x);
+  // printf("max_loc.y: %f\n", max_loc.y);
+  // printf("success: %f\n", success);
+  // return {cv::Point2d(max_loc), success};
+}
+
+std::vector<cv::Mat> gaussian_pyramid(const cv::Mat& img, int num_levels) {
+    cv::Mat lower = img.clone();
+    std::vector<cv::Mat> gaussian_pyr;
+    gaussian_pyr.push_back(lower);
+
+    for (int i = 0; i < num_levels; ++i) {
+        cv::pyrDown(lower, lower);
+        gaussian_pyr.push_back(lower);
+    }
+
+    return gaussian_pyr;
+}
+
+std::vector<cv::Mat> generate_laplacian_pyramid(const cv::Mat& img, int num_levels) {
+    std::vector<cv::Mat> gaussian_pyr = gaussian_pyramid(img, num_levels);
+
+    cv::Mat laplacian_top = gaussian_pyr.back();
+    std::vector<cv::Mat> laplacian_pyr;
+    laplacian_pyr.push_back(laplacian_top);
+
+    for (int i = num_levels; i > 0; --i) {
+        cv::Mat gaussian_expanded;
+        cv::pyrUp(gaussian_pyr[i], gaussian_expanded, gaussian_pyr[i - 1].size());
+
+        cv::Mat laplacian = gaussian_pyr[i - 1] - gaussian_expanded;
+        laplacian_pyr.push_back(laplacian);
+    }
+
+    return laplacian_pyr;
 }
 
 cv::Point2d translation(const cv::Mat &im0, const cv::Mat &im1, int filter_pcorr = 0, double odds = 1, const std::map<std::string, std::pair<int, int>> &constraints = {})
@@ -336,7 +640,8 @@ cv::Point2d translation(const cv::Mat &im0, const cv::Mat &im1, int filter_pcorr
     succ = succ2;
     angle += 180;
   }
-
+  printf("tvecx: %f\n", tvec.x);
+  printf("tvecy: %f\n", tvec.y);
   return tvec;
 }
 
@@ -351,6 +656,10 @@ cv::Mat register_image_translation(const cv::Mat &im0, const cv::Mat &im1, doubl
 
   // 假设 translation 函数返回一个包含平移向量的结构
   cv::Point2d translation_result = translation(resized_im0, resized_im1);
+
+  // cv::imshow("resized_im0", resized_im0);
+  // cv::imshow("resized_im1", resized_im1);
+  // cv::waitKey(0);
 
   int height = im1.rows;
   int width = im1.cols;
@@ -373,6 +682,8 @@ cv::Mat align_image_pair(const std::string &ref_im_path, const std::string &im_t
 {
   cv::Mat ref_image = read_image_from_path(ref_im_path);
   cv::Mat image_to_align = read_image_from_path(im_to_align_path);
+  
+  std::cout << "array size: " << ref_image.size() << ", channels: " << ref_image.channels() << std::endl;
 
   // Calculate translational shift
   return register_image_translation(ref_image, image_to_align, 10.0);
