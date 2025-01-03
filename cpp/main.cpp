@@ -45,7 +45,7 @@ int main(int argc, char** argv) {
         aligned_images.erase(aligned_images.begin());
 
     
-        // fused_pyr = focus_fuse_pyramid_pair(fused_pyr, new_pyr, fusion_kernel_size);
+        fused_pyr = focus_fuse_pyramid_pair(fused_pyr, new_pyr, fusion_kernel_size);
     }
 
     // auto fused_image = reconstruct_pyramid(fused_pyr);

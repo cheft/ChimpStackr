@@ -247,7 +247,7 @@ std::pair<cv::Point2d, double> argmax_translation(cv::Mat array, int filter_pcor
             cv::Point minLoc, maxLoc;
             cv::minMaxLoc(diff, &minVal, &maxVal, &minLoc, &maxLoc);
 
-            // 创建一个全零的 vals 矩阵
+            // 创建一个全零的 vals 矶阵
             vals = cv::Mat::zeros(1, alen, CV_64F);
 
             // 在最小值的位置设置为 1.0
@@ -712,15 +712,22 @@ cv::Mat pad_array(const cv::Mat& array, int kernel_size) {
     int y_shape = array.rows;
     int x_shape = array.cols;
 
-    int y_pad = kernel_size - y_shape;
-    int x_pad = kernel_size - x_shape;
-    if (y_pad > 0 || x_pad > 0) {
-        cv::Mat padded_array = cv::Mat::zeros(y_shape + y_pad, x_shape + x_pad, array.type());
-        array.copyTo(padded_array(cv::Rect(0, 0, x_shape, y_shape)));
-        return padded_array;
-    } else {
+    // Calculate the necessary padding on each side
+    int y_pad = std::max(0, kernel_size - y_shape);
+    int x_pad = std::max(0, kernel_size - x_shape);
+
+    // If no padding is needed, return the original array
+    if (y_pad == 0 && x_pad == 0) {
         return array;
     }
+
+    // Create a new padded array with the same type as the input
+    cv::Mat padded_array = cv::Mat::zeros(y_shape + y_pad, x_shape + x_pad, array.type());
+
+    // Copy the original array into the top-left corner of the padded array
+    array.copyTo(padded_array(cv::Rect(0, 0, x_shape, y_shape)));
+
+    return padded_array;
 }
 
 double get_deviation(const cv::Mat& matrix) {
@@ -746,12 +753,25 @@ cv::Mat compute_focusmap(const cv::Mat& pyr_level1, const cv::Mat& pyr_level2, i
 
     for (int y = 0; y < y_range; ++y) {
         for (int x = 0; x < x_range; ++x) {
-            cv::Rect roi1(std::max(0, x - k), std::max(0, y - k), std::min(kernel_size, x_range - x + k), std::min(kernel_size, y_range - y + k));
+            int y_start = std::max(0, y - k);
+            int y_end = std::min(y_range, y + k + 1); // Ensure y_end is within bounds
+            int x_start = std::max(0, x - k);
+            int x_end = std::min(x_range, x + k + 1); // Ensure x_end is within bounds
+
+            // Adjust the width and height to ensure they are within the image bounds
+            int width = x_end - x_start;
+            int height = y_end - y_start;
+
+            if (width <= 0 || height <= 0) {
+                continue; // Skip invalid regions
+            }
+
+            cv::Rect roi1(x_start, y_start, width, height);
             cv::Mat patch1 = pyr_level1(roi1);
             cv::Mat padded_patch1 = pad_array(patch1, kernel_size);
             double dev1 = get_deviation(padded_patch1);
 
-            cv::Rect roi2(std::max(0, x - k), std::max(0, y - k), std::min(kernel_size, x_range - x + k), std::min(kernel_size, y_range - y + k));
+            cv::Rect roi2(x_start, y_start, width, height);
             cv::Mat patch2 = pyr_level2(roi2);
             cv::Mat padded_patch2 = pad_array(patch2, kernel_size);
             double dev2 = get_deviation(padded_patch2);
@@ -764,10 +784,13 @@ cv::Mat compute_focusmap(const cv::Mat& pyr_level1, const cv::Mat& pyr_level2, i
 }
 
 cv::Mat fuse_pyramid_levels_using_focusmap(cv::Mat pyr_level1, const cv::Mat& pyr_level2, const cv::Mat& focusmap) {
+    CV_Assert(pyr_level1.size() == pyr_level2.size() && pyr_level1.size() == focusmap.size());
+    CV_Assert(pyr_level1.type() == pyr_level2.type() && focusmap.type() == CV_8U);
+
     for (int y = 0; y < focusmap.rows; ++y) {
         for (int x = 0; x < focusmap.cols; ++x) {
             if (focusmap.at<uchar>(y, x) == 1) {
-                pyr_level1.at<cv::Vec3f>(y, x) = pyr_level2.at<cv::Vec3f>(y, x);
+                pyr_level1.at<cv::Vec3b>(y, x) = pyr_level2.at<cv::Vec3b>(y, x);
             }
         }
     }
@@ -782,8 +805,18 @@ std::vector<cv::Mat> focus_fuse_pyramid_pair(const std::vector<cv::Mat>& pyr1, c
     for (int pyramid_level = 0; pyramid_level < pyr1.size(); ++pyramid_level) {
         if (pyramid_level < threshold_index) {
             cv::Mat gray_pyr1, gray_pyr2;
-            cv::cvtColor(pyr1[pyramid_level], gray_pyr1, cv::COLOR_BGR2GRAY);
-            cv::cvtColor(pyr2[pyramid_level], gray_pyr2, cv::COLOR_BGR2GRAY);
+            if (pyr1[pyramid_level].channels() == 3) {
+                cv::cvtColor(pyr1[pyramid_level], gray_pyr1, cv::COLOR_BGR2GRAY);
+            } else {
+                gray_pyr1 = pyr1[pyramid_level].clone();
+            }
+
+            if (pyr2[pyramid_level].channels() == 3) {
+                cv::cvtColor(pyr2[pyramid_level], gray_pyr2, cv::COLOR_BGR2GRAY);
+            } else {
+                gray_pyr2 = pyr2[pyramid_level].clone();
+            }
+
             current_focusmap = compute_focusmap(gray_pyr1, gray_pyr2, kernel_size);
         } else {
             cv::Size s = pyr2[pyramid_level].size();
