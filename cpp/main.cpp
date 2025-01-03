@@ -10,15 +10,8 @@
 
 // main function, open cv hello world
 int main(int argc, char** argv) {
-    // Read the image file
-    cv::Mat image = cv::imread("/Users/chenhaifeng/Documents/Study/python/ChimpStackr/result.jpg", cv::IMREAD_COLOR);
-    if (image.empty()) {
-        std::cout << "Could not open or find the image" << std::endl;
-        return -1;
-    }
-
-    nc::NdArray<int> a = { {1, 2}, {3, 4}, {5, 6} };
-    std::cout << a << std::endl;
+    auto pyramid_num_levels = 8;
+    auto fusion_kernel_size = 6;
 
     auto image_paths = [] {
         std::vector<std::string> paths;
@@ -30,30 +23,34 @@ int main(int argc, char** argv) {
 
     std::vector<cv::Mat> aligned_images;
     aligned_images.push_back(read_image_from_path(image_paths[0]));
-    // aligned_images.push_back(align_image_pair(image_paths[0], image_paths[1]));
+    
+    auto fused_pyr = generate_laplacian_pyramid(aligned_images[0], pyramid_num_levels);
+    std::cout << "======= fused_pyr image size " << fused_pyr.size() << "..." << std::endl;
+    // 归一化并显示
+    // cv::Mat display;
+    // cv::normalize(fused_pyr[0], display, 0, 1, cv::NORM_MINMAX);
+    // cv::imshow("Display window", fused_pyr[0]);
+    // cv::waitKey(0);
 
-    auto fused_pyr = generate_laplacian_pyramid(aligned_images[0], 8);
+    for (size_t i = 1; i < image_paths.size(); ++i) {
+        std::cout << "Processing image " << i + 1 << "/" << image_paths.size() << "..." << std::endl;
 
-    // for (size_t i = 1; i < image_paths.size(); ++i) {
-    //     std::cout << "Processing image " << i + 1 << "/" << image_paths.size() << "..." << std::endl;
+        aligned_images.push_back(align_image_pair(image_paths[0], image_paths[i]));
+        auto new_pyr = generate_laplacian_pyramid(aligned_images[1], pyramid_num_levels);
+        std::cout << "======= new_pyr image size " << new_pyr.size() << "..." << std::endl;
 
-    //     aligned_images.push_back(algorithm.align_image_pair(image_paths[0], image_paths[i]));
-    //     auto new_pyr = Algorithm::generate_laplacian_pyramid(aligned_images[1], pyramid_num_levels);
-    //     aligned_images.erase(aligned_images.begin());
+        // cv::imshow("Display window", new_pyr[1]);
+        // cv::waitKey(0);
 
-    //     fused_pyr = Algorithm::focus_fuse_pyramid_pair(fused_pyr, new_pyr, fusion_kernel_size);
-    // }
+        aligned_images.erase(aligned_images.begin());
 
-    // auto fused_image = Algorithm::reconstruct_pyramid(fused_pyr);
+    
+        // fused_pyr = focus_fuse_pyramid_pair(fused_pyr, new_pyr, fusion_kernel_size);
+    }
 
+    // auto fused_image = reconstruct_pyramid(fused_pyr);
 
-    // Create a window
-    cv::namedWindow("Display window", cv::WINDOW_AUTOSIZE);
-    // Show our image inside the created window
-    cv::imshow("Display window", image);
-    // cv::imshow("Fused Image", fused_image);
-
-    // Wait for any keystroke in the window
-    cv::waitKey(0);
+    // cv::imshow("Display window", image);
+    // cv::waitKey(0);
     return 0;
 }

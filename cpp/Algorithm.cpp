@@ -464,7 +464,7 @@ std::pair<cv::Point2d, double> phase_correlation(
 
   // 归一化并显示
   // cv::Mat display;
-  // cv::normalize(cps_mat, display, 0, 1, cv::NORM_MINMAX); 这个归一化会影响图片显示
+  // cv::normalize(cps_mat, display, 0, 1, cv::NORM_MINMAX); 这个归一化会影响图片显示, 有时需要加上
 
   // cv::imshow("cps", scps);
   // cv::waitKey(0);
@@ -598,7 +598,7 @@ std::vector<cv::Mat> gaussian_pyramid(const cv::Mat& img, int num_levels) {
 
 std::vector<cv::Mat> generate_laplacian_pyramid(const cv::Mat& img, int num_levels) {
     std::vector<cv::Mat> gaussian_pyr = gaussian_pyramid(img, num_levels);
-
+    
     cv::Mat laplacian_top = gaussian_pyr.back();
     std::vector<cv::Mat> laplacian_pyr;
     laplacian_pyr.push_back(laplacian_top);
@@ -607,7 +607,26 @@ std::vector<cv::Mat> generate_laplacian_pyramid(const cv::Mat& img, int num_leve
         cv::Mat gaussian_expanded;
         cv::pyrUp(gaussian_pyr[i], gaussian_expanded, gaussian_pyr[i - 1].size());
 
-        cv::Mat laplacian = gaussian_pyr[i - 1] - gaussian_expanded;
+        // 使用 NumCpp 实现 np.subtract
+        nc::NdArray<double> nc_gaussian_pyr_prev(gaussian_pyr[i - 1].rows, gaussian_pyr[i - 1].cols);
+        nc::NdArray<double> nc_gaussian_expanded(gaussian_expanded.rows, gaussian_expanded.cols);
+
+        for (int row = 0; row < gaussian_pyr[i - 1].rows; ++row) {
+            for (int col = 0; col < gaussian_pyr[i - 1].cols; ++col) {
+                nc_gaussian_pyr_prev(row, col) = static_cast<double>(gaussian_pyr[i - 1].at<float>(row, col));
+                nc_gaussian_expanded(row, col) = static_cast<double>(gaussian_expanded.at<float>(row, col));
+            }
+        }
+
+        nc::NdArray<double> nc_laplacian = nc_gaussian_pyr_prev - nc_gaussian_expanded;
+
+        cv::Mat laplacian(gaussian_pyr[i - 1].size(), CV_32F);
+        for (int row = 0; row < laplacian.rows; ++row) {
+            for (int col = 0; col < laplacian.cols; ++col) {
+                laplacian.at<float>(row, col) = static_cast<float>(nc_laplacian(row, col));
+            }
+        }
+
         laplacian_pyr.push_back(laplacian);
     }
 
@@ -687,4 +706,93 @@ cv::Mat align_image_pair(const std::string &ref_im_path, const std::string &im_t
 
   // Calculate translational shift
   return register_image_translation(ref_image, image_to_align, 10.0);
+}
+
+cv::Mat pad_array(const cv::Mat& array, int kernel_size) {
+    int y_shape = array.rows;
+    int x_shape = array.cols;
+
+    int y_pad = kernel_size - y_shape;
+    int x_pad = kernel_size - x_shape;
+    if (y_pad > 0 || x_pad > 0) {
+        cv::Mat padded_array = cv::Mat::zeros(y_shape + y_pad, x_shape + x_pad, array.type());
+        array.copyTo(padded_array(cv::Rect(0, 0, x_shape, y_shape)));
+        return padded_array;
+    } else {
+        return array;
+    }
+}
+
+double get_deviation(const cv::Mat& matrix) {
+    double summed_deviation = 0.0;
+    double average_value = cv::mean(matrix)[0];
+    int kernel_area = matrix.rows * matrix.cols;
+
+    for (int y = 0; y < matrix.rows; ++y) {
+        for (int x = 0; x < matrix.cols; ++x) {
+            double diff = matrix.at<double>(y, x) - average_value;
+            summed_deviation += (diff * diff) / kernel_area;
+        }
+    }
+    return summed_deviation;
+}
+
+cv::Mat compute_focusmap(const cv::Mat& pyr_level1, const cv::Mat& pyr_level2, int kernel_size) {
+    int y_range = pyr_level1.rows;
+    int x_range = pyr_level1.cols;
+
+    cv::Mat focusmap = cv::Mat::zeros(y_range, x_range, CV_8U);
+    int k = kernel_size / 2;
+
+    for (int y = 0; y < y_range; ++y) {
+        for (int x = 0; x < x_range; ++x) {
+            cv::Rect roi1(std::max(0, x - k), std::max(0, y - k), std::min(kernel_size, x_range - x + k), std::min(kernel_size, y_range - y + k));
+            cv::Mat patch1 = pyr_level1(roi1);
+            cv::Mat padded_patch1 = pad_array(patch1, kernel_size);
+            double dev1 = get_deviation(padded_patch1);
+
+            cv::Rect roi2(std::max(0, x - k), std::max(0, y - k), std::min(kernel_size, x_range - x + k), std::min(kernel_size, y_range - y + k));
+            cv::Mat patch2 = pyr_level2(roi2);
+            cv::Mat padded_patch2 = pad_array(patch2, kernel_size);
+            double dev2 = get_deviation(padded_patch2);
+
+            focusmap.at<uchar>(y, x) = (dev2 > dev1) ? 1 : 0;
+        }
+    }
+
+    return focusmap;
+}
+
+cv::Mat fuse_pyramid_levels_using_focusmap(cv::Mat pyr_level1, const cv::Mat& pyr_level2, const cv::Mat& focusmap) {
+    for (int y = 0; y < focusmap.rows; ++y) {
+        for (int x = 0; x < focusmap.cols; ++x) {
+            if (focusmap.at<uchar>(y, x) == 1) {
+                pyr_level1.at<cv::Vec3f>(y, x) = pyr_level2.at<cv::Vec3f>(y, x);
+            }
+        }
+    }
+    return pyr_level1;
+}
+
+std::vector<cv::Mat> focus_fuse_pyramid_pair(const std::vector<cv::Mat>& pyr1, const std::vector<cv::Mat>& pyr2, int kernel_size) {
+    int threshold_index = pyr1.size() - 1;
+    std::vector<cv::Mat> new_pyr;
+    cv::Mat current_focusmap;
+
+    for (int pyramid_level = 0; pyramid_level < pyr1.size(); ++pyramid_level) {
+        if (pyramid_level < threshold_index) {
+            cv::Mat gray_pyr1, gray_pyr2;
+            cv::cvtColor(pyr1[pyramid_level], gray_pyr1, cv::COLOR_BGR2GRAY);
+            cv::cvtColor(pyr2[pyramid_level], gray_pyr2, cv::COLOR_BGR2GRAY);
+            current_focusmap = compute_focusmap(gray_pyr1, gray_pyr2, kernel_size);
+        } else {
+            cv::Size s = pyr2[pyramid_level].size();
+            cv::resize(current_focusmap, current_focusmap, s, 0, 0, cv::INTER_AREA);
+        }
+
+        cv::Mat new_pyr_level = fuse_pyramid_levels_using_focusmap(pyr1[pyramid_level].clone(), pyr2[pyramid_level], current_focusmap);
+        new_pyr.push_back(new_pyr_level);
+    }
+
+    return new_pyr;
 }

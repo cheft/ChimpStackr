@@ -23,5 +23,10 @@ cv::Mat register_image_translation(const cv::Mat &im0, const cv::Mat &im1, doubl
 cv::Mat align_image_pair(const std::string &ref_im_path, const std::string &im_to_align_path);
 std::vector<cv::Mat> gaussian_pyramid(const cv::Mat& img, int num_levels);
 std::vector<cv::Mat> generate_laplacian_pyramid(const cv::Mat& img, int num_levels);
+cv::Mat pad_array(const cv::Mat& array, int kernel_size);
+double get_deviation(const cv::Mat& matrix);
+cv::Mat compute_focusmap(const cv::Mat& pyr_level1, const cv::Mat& pyr_level2, int kernel_size);
+cv::Mat fuse_pyramid_levels_using_focusmap(cv::Mat& pyr_level1, const cv::Mat& pyr_level2, const cv::Mat& focusmap);
+std::vector<cv::Mat> focus_fuse_pyramid_pair(const std::vector<cv::Mat>& pyr1, const std::vector<cv::Mat>& pyr2, int kernel_size);
 
 #endif // ALGORITHM_H
