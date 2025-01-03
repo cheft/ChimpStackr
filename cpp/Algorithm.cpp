@@ -284,24 +284,13 @@ std::pair<cv::Point2d, double> argmax_translation(cv::Mat array, int filter_pcor
     cv::Point2d tvec = argmax_ext(array, std::numeric_limits<double>::infinity());
     
     tvec = interpolate(array_orig, tvec);
-    printf("tvecx: %f\n", tvec.x);
-    printf("tvecy: %f\n", tvec.y);
-
-    std::cout << "---------------------" << std::endl;
-    return std::pair<cv::Point2d, double>(cv::Point2d(0, 0), 0.0);
-
-    // cv::Point2d tvec = argmax_ext(array, std::numeric_limits<double>::infinity());
     // printf("tvecx: %f\n", tvec.x);
     // printf("tvecy: %f\n", tvec.y);
-    // try {
-    //   tvec = interpolate(array_orig, tvec);
-    // } catch (const cv::Exception& e) {
-    //     std::cerr << "OpenCV exception3: " << e.what() << std::endl;
-    // }
-    // double success = get_success(array_orig, tvec, 2);
-    // std::cout << "tvec: " << tvec << std::endl;
-    // std::cout << "success: " << success << std::endl;
-    // return {tvec, success};
+
+    double success = get_success(array_orig, tvec, 2);
+    std::cout << "tvec: " << tvec << std::endl;
+    std::cout << "success: " << success << std::endl;
+    return {tvec, success};
 }
 
 cv::Mat resize_image(const cv::Mat &im, double division_factor)
@@ -470,8 +459,6 @@ std::pair<cv::Point2d, double> phase_correlation(
   // cv::waitKey(0);
   // 以上是 OK 的
 
-
-
   std::pair<cv::Point2d, double> pd = argmax_translation(scps, filter_pcorr, constraints);
   cv::Point2d max_loc = pd.first;
   double success = pd.second;
@@ -586,12 +573,14 @@ std::pair<cv::Point2d, double> phase_correlation(
 std::vector<cv::Mat> gaussian_pyramid(const cv::Mat& img, int num_levels) {
     cv::Mat lower = img.clone();
     std::vector<cv::Mat> gaussian_pyr;
+    lower.convertTo(lower, CV_32F);  // 每次下采样后转换为 float32 类型
     gaussian_pyr.push_back(lower);
     for (int i = 0; i < num_levels; ++i) {
         cv::pyrDown(lower, lower);
+        lower.convertTo(lower, CV_32F);  // 每次下采样后转换为 float32 类型
         gaussian_pyr.push_back(lower);
     }
-  
+    
     return gaussian_pyr;
 }
 
@@ -605,13 +594,17 @@ std::vector<cv::Mat> generate_laplacian_pyramid(const cv::Mat& img, int num_leve
     for (int i = num_levels; i > 0; --i) {
         cv::Mat gaussian_expanded;
         cv::pyrUp(gaussian_pyr[i], gaussian_expanded, gaussian_pyr[i - 1].size());
-
+        
         // 使用 OpenCV 的逐元素操作
         cv::Mat laplacian;
         cv::subtract(gaussian_pyr[i - 1], gaussian_expanded, laplacian);
+  
+        // std::cout << "laplacian[1] size: " << laplacian.size() << ", channels: " << laplacian.channels() << ", type: " << laplacian.type() << std::endl;
 
-        std::cout << "laplacian[1] size: " << laplacian.size() << ", channels: " << laplacian.channels() << ", type: " << laplacian.type() << std::endl;
-
+        // cv::Mat display;
+        // cv::normalize(laplacian, display, 0, 1, cv::NORM_MINMAX);
+        // cv::imshow("Display window", display);
+        // cv::waitKey(0);
         laplacian_pyr.push_back(laplacian);
     }
 
@@ -620,7 +613,7 @@ std::vector<cv::Mat> generate_laplacian_pyramid(const cv::Mat& img, int num_leve
 
 cv::Mat reconstruct_pyramid(const std::vector<cv::Mat>& laplacian_pyr) {
     cv::Mat laplacian_top = laplacian_pyr[0];
-
+   
     std::vector<cv::Mat> laplacian_lst;
     laplacian_lst.push_back(laplacian_top);
     int num_levels = laplacian_pyr.size() - 1;
@@ -629,10 +622,18 @@ cv::Mat reconstruct_pyramid(const std::vector<cv::Mat>& laplacian_pyr) {
         cv::Size size(laplacian_pyr[i + 1].cols, laplacian_pyr[i + 1].rows);
         cv::Mat laplacian_expanded;
         cv::pyrUp(laplacian_top, laplacian_expanded, size);
+
+         // // 归一化并显示
+        // cv::Mat display;
+        // cv::normalize(laplacian_top, display, 0, 1, cv::NORM_MINMAX);
+        // cv::imshow("Display window", display);
+        // cv::waitKey(0);
+
         laplacian_top = laplacian_pyr[i + 1] + laplacian_expanded;
         laplacian_lst.push_back(laplacian_top);
     }
 
+   
     return laplacian_lst[num_levels];
 }
 
@@ -662,8 +663,8 @@ cv::Point2d translation(const cv::Mat &im0, const cv::Mat &im1, int filter_pcorr
     succ = succ2;
     angle += 180;
   }
-  printf("tvecx: %f\n", tvec.x);
-  printf("tvecy: %f\n", tvec.y);
+//   printf("tvecx: %f\n", tvec.x);
+//   printf("tvecy: %f\n", tvec.y);
   return tvec;
 }
 
@@ -678,11 +679,7 @@ cv::Mat register_image_translation(const cv::Mat &im0, const cv::Mat &im1, doubl
 
   // 假设 translation 函数返回一个包含平移向量的结构
   cv::Point2d translation_result = translation(resized_im0, resized_im1);
-
-  // cv::imshow("resized_im0", resized_im0);
-  // cv::imshow("resized_im1", resized_im1);
-  // cv::waitKey(0);
-
+  
   int height = im1.rows;
   int width = im1.cols;
   double y_shift = translation_result.y * scale_factor;
@@ -692,6 +689,8 @@ cv::Mat register_image_translation(const cv::Mat &im0, const cv::Mat &im1, doubl
   cv::Mat result;
   cv::warpAffine(im1, result, translation_matrix, cv::Size(width, height));
 
+//   cv::imshow("result 7777 ", result);
+//   cv::waitKey(0);
   return result;
 }
 
@@ -705,7 +704,7 @@ cv::Mat align_image_pair(const std::string &ref_im_path, const std::string &im_t
   cv::Mat ref_image = read_image_from_path(ref_im_path);
   cv::Mat image_to_align = read_image_from_path(im_to_align_path);
   
-  std::cout << "array size: " << ref_image.size() << ", channels: " << ref_image.channels() << std::endl;
+  std::cout << "image_to_align size: " << image_to_align.size() << ", channels: " << image_to_align.channels() << ", type: " << image_to_align.type() << std::endl; // python 的 dtype: uint8 == CV_8UC3 == type 16
 
   // Calculate translational shift
   return register_image_translation(ref_image, image_to_align, 10.0);
@@ -716,24 +715,29 @@ cv::Mat pad_array(const cv::Mat& array, int kernel_size) {
     int x_shape = array.cols;
 
     // Calculate the necessary padding on each side
-    int y_pad = std::max(0, kernel_size - y_shape);
-    int x_pad = std::max(0, kernel_size - x_shape);
+    int y_pad = kernel_size - y_shape;
+    int x_pad = kernel_size - x_shape;
 
     // If no padding is needed, return the original array
-    if (y_pad == 0 && x_pad == 0) {
+    if (y_pad <= 0 && x_pad <= 0) {
         return array;
     }
 
     // Create a new padded array with the same type as the input
-    cv::Mat padded_array = cv::Mat::zeros(y_shape + y_pad, x_shape + x_pad, array.type());
+    cv::Mat padded_array = cv::Mat::zeros(y_shape + std::max(0, y_pad), x_shape + std::max(0, x_pad), array.type());
 
     // Copy the original array into the top-left corner of the padded array
     array.copyTo(padded_array(cv::Rect(0, 0, x_shape, y_shape)));
-
+    cv::imshow("padded_array c++", padded_array);
+    cv::waitKey(0);
     return padded_array;
 }
 
 double get_deviation(const cv::Mat& matrix) {
+    // cv::Mat matrix_double;
+    // matrix.convertTo(matrix_double, CV_64F);
+    // matrix_double /= 255.0; // 上面的代码待验证
+
     double summed_deviation = 0.0;
     double average_value = cv::mean(matrix)[0];
     int kernel_area = matrix.rows * matrix.cols;
@@ -744,62 +748,60 @@ double get_deviation(const cv::Mat& matrix) {
             summed_deviation += (diff * diff) / kernel_area;
         }
     }
+    // std::cout << "summed_deviation: " << summed_deviation << std::endl;
     return summed_deviation;
 }
 
 cv::Mat compute_focusmap(const cv::Mat& pyr_level1, const cv::Mat& pyr_level2, int kernel_size) {
     int y_range = pyr_level1.rows;
     int x_range = pyr_level1.cols;
-
+    // 2D focusmap (CV_8U); possible values:
+    // 0 => pixel of pyr_level1
+    // 1 => pixel of pyr_level2
     cv::Mat focusmap = cv::Mat::zeros(y_range, x_range, CV_8U);
     int k = kernel_size / 2;
+    std::cout << "y_range: " << y_range << ", x_range: " << x_range << ", k: " << k << std::endl;
 
-    for (int y = 0; y < y_range; ++y) {
-        for (int x = 0; x < x_range; ++x) {
-            int y_start = std::max(0, y - k);
-            int y_end = std::min(y_range, y + k + 1); // Ensure y_end is within bounds
-            int x_start = std::max(0, x - k);
-            int x_end = std::min(x_range, x + k + 1); // Ensure x_end is within bounds
+    for (int y = 0; y < y_range; y++) {
+        for (int x = 0; x < x_range; x++) {
+            int y_slice_start = std::max(0, y - k);
+            int y_slice_end = std::min(y_range, y + k);
+            int x_slice_start = std::max(0, x - k);
+            int x_slice_end = std::min(x_range, x + k - 1); // 有问题
 
-            // Adjust the width and height to ensure they are within the image bounds
-            int width = x_end - x_start;
-            int height = y_end - y_start;
-
-            if (width <= 0 || height <= 0) {
-                continue; // Skip invalid regions
-            }
-
-            cv::Rect roi1(x_start, y_start, width, height);
-            cv::Mat patch1 = pyr_level1(roi1);
+            cv::Mat patch1 = pyr_level1(cv::Range(y_slice_start, y_slice_end), cv::Range(x_slice_start, x_slice_end));
+            std::cout << "patch1 size: " << patch1.size() << ", channels: " << patch1.channels() << ", type: " << patch1.type() << std::endl;
             cv::Mat padded_patch1 = pad_array(patch1, kernel_size);
             double dev1 = get_deviation(padded_patch1);
 
-            cv::Rect roi2(x_start, y_start, width, height);
-            cv::Mat patch2 = pyr_level2(roi2);
+            cv::Mat patch2 = pyr_level2(cv::Range(y_slice_start, y_slice_end), cv::Range(x_slice_start, x_slice_end));
             cv::Mat padded_patch2 = pad_array(patch2, kernel_size);
             double dev2 = get_deviation(padded_patch2);
 
-            focusmap.at<uchar>(y, x) = (dev2 > dev1) ? 1 : 0;
+            // Determine which patch is more in focus
+            uchar value_to_insert = (dev2 > dev1) ? 1 : 0;
+            focusmap.at<uchar>(y, x) = value_to_insert;
         }
     }
 
+    cv::Mat display;
+    cv::normalize(focusmap, display, 0, 1, cv::NORM_MINMAX);
+    cv::imshow("focusmap c++", display);
+    cv::waitKey(0);
     return focusmap;
 }
 
 cv::Mat fuse_pyramid_levels_using_focusmap(cv::Mat pyr_level1, const cv::Mat& pyr_level2, const cv::Mat& focusmap) {
-    CV_Assert(pyr_level1.size() == pyr_level2.size() && pyr_level1.size() == focusmap.size());
-    CV_Assert(pyr_level1.type() == pyr_level2.type() && focusmap.type() == CV_8U);
-
     for (int y = 0; y < focusmap.rows; ++y) {
         for (int x = 0; x < focusmap.cols; ++x) {
-            if (focusmap.at<uchar>(y, x) == 1) {
+            if (focusmap.at<uchar>(y, x) != 0) {  // 如果 focusmap[y, x] 不为 0
                 pyr_level1.at<cv::Vec3b>(y, x) = pyr_level2.at<cv::Vec3b>(y, x);
             }
+            // 否则，pyr_level1[y, x] 保持不变
         }
     }
     return pyr_level1;
 }
-
 std::vector<cv::Mat> focus_fuse_pyramid_pair(const std::vector<cv::Mat>& pyr1, const std::vector<cv::Mat>& pyr2, int kernel_size) {
     int threshold_index = pyr1.size() - 1;
     std::vector<cv::Mat> new_pyr;
@@ -808,25 +810,21 @@ std::vector<cv::Mat> focus_fuse_pyramid_pair(const std::vector<cv::Mat>& pyr1, c
     for (int pyramid_level = 0; pyramid_level < pyr1.size(); ++pyramid_level) {
         if (pyramid_level < threshold_index) {
             cv::Mat gray_pyr1, gray_pyr2;
-            if (pyr1[pyramid_level].channels() == 3) {
-                cv::cvtColor(pyr1[pyramid_level], gray_pyr1, cv::COLOR_BGR2GRAY);
-            } else {
-                gray_pyr1 = pyr1[pyramid_level].clone();
-            }
-
-            if (pyr2[pyramid_level].channels() == 3) {
-                cv::cvtColor(pyr2[pyramid_level], gray_pyr2, cv::COLOR_BGR2GRAY);
-            } else {
-                gray_pyr2 = pyr2[pyramid_level].clone();
-            }
-
+            cv::cvtColor(pyr1[pyramid_level], gray_pyr1, cv::COLOR_BGR2GRAY);
+            cv::cvtColor(pyr2[pyramid_level], gray_pyr2, cv::COLOR_BGR2GRAY);
             current_focusmap = compute_focusmap(gray_pyr1, gray_pyr2, kernel_size);
+            // cv::imshow("current_focusmap c++ 1", current_focusmap);
+            // cv::waitKey(0);
         } else {
             cv::Size s = pyr2[pyramid_level].size();
             cv::resize(current_focusmap, current_focusmap, s, 0, 0, cv::INTER_AREA);
+            // cv::imshow("current_focusmap c++ 2", current_focusmap);
+            // cv::waitKey(0);
         }
 
         cv::Mat new_pyr_level = fuse_pyramid_levels_using_focusmap(pyr1[pyramid_level].clone(), pyr2[pyramid_level], current_focusmap);
+        // cv::imshow("new_pyr_level c++", new_pyr_level);
+        // cv::waitKey(0);
         new_pyr.push_back(new_pyr_level);
     }
 
