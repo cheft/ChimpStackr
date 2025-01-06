@@ -60,6 +60,9 @@ python3 src/main.py samples/2160/1.png samples/2160/2.png samples/2160/5.png sam
 
 python3 src/main.py samples/examples/zoom/Gibbaranea-01.jpg samples/examples/zoom/Gibbaranea-02.jpg samples/examples/zoom/Gibbaranea-03.jpg -o result.jpg -k 6 -p 8
 
+python3 src/main.py samples/new/1.jpg samples/new/2.jpg samples/new/3.jpg samples/new/4.jpg samples/new/5.jpg  -o result.jpg -k 6 -p 8
+
+
 pyenv install 3.11 && pyenv global 3.11
 
 export PATH="$HOME/.pyenv/bin:$PATH"
